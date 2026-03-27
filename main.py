@@ -12,7 +12,9 @@ from config import DOCS_DIR, TOP_K, MAX_HISTORY_TURNS
 
 sessions: dict = {}
 
-
+@app.get("/")
+def home():
+    return {"message": "RAG API running 🚀"}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
