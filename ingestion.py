@@ -80,8 +80,8 @@ def load_documents():
 # ─────────────────────────────────────────────────────────────
 def semantic_chunk(docs, filenames):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=300,          # smaller chunks → better retrieval
-        chunk_overlap=80,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
         separators=["\n\n", "\n", ". ", " "],
     )
 
