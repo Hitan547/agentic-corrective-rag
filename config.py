@@ -12,7 +12,6 @@ FAISS_INDEX_PATH  = "./faiss.index"
 BM25_PATH         = "./bm25.pkl"
 CHUNKS_PATH       = "./chunks.pkl"
 SOURCES_PATH      = "./sources.pkl"
-EMBEDDER_PATH     = "./embedder_model"
 EMBEDDER_NAME     = "all-MiniLM-L6-v2"
 
 CHUNK_SIZE        = 500
