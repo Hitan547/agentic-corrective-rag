@@ -107,3 +107,6 @@ def clear_session(session_id: str):
 @app.get("/health")
 def health():
     return {"status": "ok", "indexes_loaded": _indexes_loaded()}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
