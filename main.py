@@ -91,7 +91,8 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
 
 def _reindex():
     try:
-        run_ingestion()
+        from retriever import _model
+        run_ingestion(model=_model)
         reload_indexes()
         print("Re-indexing complete.")
     except Exception as e:
