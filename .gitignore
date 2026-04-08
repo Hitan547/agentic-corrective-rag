@@ -4,3 +4,9 @@ __pycache__/
 faiss.index
 embedder_model/
 .env
+*.pkl
+faiss.index
+docs/
+embedder_model/
+__pycache__/
+.pytest_cache/

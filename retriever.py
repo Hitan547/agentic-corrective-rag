@@ -27,7 +27,7 @@ def load_indexes():
     with open(BM25_PATH,    "rb") as f: _bm25_index = pickle.load(f)
     with open(CHUNKS_PATH,  "rb") as f: _chunks     = pickle.load(f)
     with open(SOURCES_PATH, "rb") as f: _sources    = pickle.load(f)
-    _model    = SentenceTransformer(EMBEDDER_PATH)
+    _model = SentenceTransformer("all-MiniLM-L6-v2")
     _reranker = CrossEncoder(RERANKER_MODEL)          # ← reranker loads once
     print(f"Indexes loaded: {_faiss_index.ntotal} vectors, {len(_chunks)} chunks")
 
