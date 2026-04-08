@@ -4,7 +4,7 @@ import faiss
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from config import (
     FAISS_INDEX_PATH, BM25_PATH, CHUNKS_PATH,
-    SOURCES_PATH, EMBEDDER_PATH
+    SOURCES_PATH
 )
 
 _faiss_index    = None
