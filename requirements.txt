@@ -14,4 +14,4 @@ pydantic>=2.7
 pydantic-core>=2.20.0
 python-multipart==0.0.20
 pytest==8.3.5
-python-3.11.9
+
