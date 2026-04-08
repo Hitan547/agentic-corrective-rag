@@ -3,7 +3,7 @@ import uuid
 import streamlit as st
 import requests
 
-API = "http://localhost:8000"
+API = "http://localhost:8080"  # must match uvicorn port
 
 st.set_page_config(
     page_title="Corrective RAG",

@@ -5,16 +5,14 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 
-from retriever import load_indexes, reload_indexes, hybrid_retrieve
+from retriever import load_indexes, reload_indexes, hybrid_retrieve, indexes_loaded as _indexes_loaded
 from agent import run_rag_agent
 from ingestion import run_ingestion
 from config import DOCS_DIR, TOP_K, MAX_HISTORY_TURNS
 
 sessions: dict = {}
 
-@app.get("/")
-def home():
-    return {"message": "RAG API running 🚀"}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -25,6 +23,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Corrective RAG API", version="1.0", lifespan=lifespan)
+
+
+@app.get("/")
+def home():
+    return {"message": "RAG API running 🚀"}
 
 
 class QueryRequest(BaseModel):
@@ -43,7 +46,7 @@ class QueryResponse(BaseModel):
 
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest):
-    if not indexes_loaded():
+    if not _indexes_loaded():
         raise HTTPException(
             status_code=503,
             detail="Indexes not ready. Upload and index documents first."
@@ -95,11 +98,6 @@ def _reindex():
         print(f"Re-indexing failed: {e}")
 
 
-def indexes_loaded():
-    from retriever import indexes_loaded as _il
-    return _il()
-
-
 @app.delete("/session/{session_id}")
 def clear_session(session_id: str):
     sessions.pop(session_id, None)
@@ -108,4 +106,4 @@ def clear_session(session_id: str):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "indexes_loaded": indexes_loaded()}
+    return {"status": "ok", "indexes_loaded": _indexes_loaded()}
