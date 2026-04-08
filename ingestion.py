@@ -84,24 +84,21 @@ def semantic_chunk(docs, filenames):
     return all_chunks, all_sources
 
 
-def build_indexes(chunks):
+def build_indexes(chunks, model=None):
     print("\nBuilding dense embeddings...")
-
-    model = SentenceTransformer(EMBEDDER_NAME)
+    if model is None:
+        model = SentenceTransformer(EMBEDDER_NAME)
     embeddings = model.encode(chunks, show_progress_bar=True, batch_size=32)
     embeddings = np.array(embeddings, dtype="float32")
     faiss.normalize_L2(embeddings)
-
     dim = embeddings.shape[1]
     faiss_index = faiss.IndexFlatIP(dim)
     faiss_index.add(embeddings)
     print(f"FAISS index: {faiss_index.ntotal} vectors, dim={dim}")
-
     tokenized = [c.lower().split() for c in chunks]
     bm25_index = BM25Okapi(tokenized)
     print("BM25 index: built")
-
-    return faiss_index, bm25_index  # model not returned — HuggingFace caches it
+    return faiss_index, bm25_index
 
 
 def save_indexes(faiss_index, bm25_index, chunks, sources):
