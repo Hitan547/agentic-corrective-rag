@@ -23,12 +23,19 @@ def indexes_loaded() -> bool:
 
 def load_indexes():
     global _faiss_index, _bm25_index, _chunks, _sources, _model, _reranker
+
+    # ← ADD THIS GUARD
+    import os
+    if not os.path.exists(FAISS_INDEX_PATH):
+        print("WARNING: No FAISS index found at startup. Upload documents to initialize.")
+        return
+
     _faiss_index = faiss.read_index(FAISS_INDEX_PATH)
     with open(BM25_PATH,    "rb") as f: _bm25_index = pickle.load(f)
     with open(CHUNKS_PATH,  "rb") as f: _chunks     = pickle.load(f)
     with open(SOURCES_PATH, "rb") as f: _sources    = pickle.load(f)
-    _model = SentenceTransformer("all-MiniLM-L6-v2")
-    _reranker = CrossEncoder(RERANKER_MODEL)          # ← reranker loads once
+    _model    = SentenceTransformer("all-MiniLM-L6-v2")
+    _reranker = CrossEncoder(RERANKER_MODEL)
     print(f"Indexes loaded: {_faiss_index.ntotal} vectors, {len(_chunks)} chunks")
 
 
