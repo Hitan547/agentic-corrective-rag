@@ -114,7 +114,7 @@ def save_indexes(faiss_index, bm25_index, chunks, sources):
     print("\nSaved indexes to disk.")
 
 
-def run_ingestion():
+def run_ingestion(model=None):
     print("=== Starting ingestion ===\n")
     docs, filenames = load_documents()
     chunks, sources = semantic_chunk(docs, filenames)
