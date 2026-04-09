@@ -82,10 +82,13 @@ async def upload(file: UploadFile = File(...)):
 def _reindex():
     try:
         run_ingestion()
+        print("Ingestion done, reloading indexes...")
         reload_indexes()
-        print("Re-indexing complete.")
+        print(f"Re-indexing complete. Indexes loaded: {_indexes_loaded()}")
     except Exception as e:
+        import traceback
         print(f"Re-indexing failed: {e}")
+        traceback.print_exc()
 
 @app.delete("/session/{session_id}")
 def clear_session(session_id: str):
