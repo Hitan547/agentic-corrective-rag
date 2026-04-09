@@ -118,7 +118,7 @@ def run_ingestion(model=None):
     print("=== Starting ingestion ===\n")
     docs, filenames = load_documents()
     chunks, sources = semantic_chunk(docs, filenames)
-    fi, bm25 = build_indexes(chunks)
+    fi, bm25 = build_indexes(chunks, model=model)
     save_indexes(fi, bm25, chunks, sources)
     print("\n=== Ingestion complete ===")
 
