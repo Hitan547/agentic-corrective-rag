@@ -1,7 +1,7 @@
 import os
 import shutil
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -73,7 +73,8 @@ async def query(req: QueryRequest):
 
 
 @app.post("/upload")
-async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+
+async def upload(file: UploadFile = File(...)):
     allowed = {".txt", ".pdf"}
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in allowed:
@@ -84,15 +85,14 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    background_tasks.add_task(_reindex)
+    _reindex()
     return {"status": "uploaded", "filename": file.filename,
-            "message": "Indexing started in background."}
+            "message": "Indexing complete."}
 
 
 def _reindex():
     try:
-        from retriever import _model
-        run_ingestion(model=_model)
+        run_ingestion()
         reload_indexes()
         print("Re-indexing complete.")
     except Exception as e:
