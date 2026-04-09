@@ -47,9 +47,16 @@ class QueryResponse(BaseModel):
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest):
     if not _indexes_loaded():
+        try:
+            load_indexes()
+        except Exception:
+            pass
+    if not _indexes_loaded():
         raise HTTPException(
             status_code=503,
             detail="Indexes not ready. Upload and index documents first."
+        )
+    results = hybrid_retrieve(req.question, top_k=req.top_k)
         )
 
     results = hybrid_retrieve(req.question, top_k=req.top_k)
