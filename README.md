@@ -4,7 +4,7 @@
 
 **Production-grade document retrieval system with self-correcting agent reasoning**
 
-[![Frontend UI](https://img.shields.io/badge/Frontend-HF%20Spaces-blue?style=for-the-badge&logo=huggingface)](https://hitan2004-agentic-corrective-rag-ui.hf.space)
+[![Frontend UI](https://img.shields.io/badge/Frontend-HF%20Spaces-blue?style=for-the-badge&logo=huggingface)]([https://hitan2004-agentic-corrective-rag-ui.hf.space](https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui))
 [![Backend API](https://img.shields.io/badge/API-HF%20Spaces-blue?style=for-the-badge&logo=huggingface)](https://hitan2004-agentic-corrective-rag.hf.space)
 [![API Docs](https://img.shields.io/badge/Swagger-Docs-green?style=for-the-badge)](https://hitan2004-agentic-corrective-rag.hf.space/docs)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Hitan547/agentic-corrective-rag)
