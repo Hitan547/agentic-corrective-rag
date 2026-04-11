@@ -38,7 +38,7 @@ jobs:
           git config --global user.email "you@example.com"
           git config --global user.name "github-actions"
 
-          git clone https://Hitan2004:$HF_TOKEN@huggingface.co/spaces/Hitan2004/agentic-corrective-rag hf_backend
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/Hitan2004/agentic-corrective-rag hf_backend
 
           rsync -av --exclude='.git' --exclude='ui' ./ hf_backend/
 
@@ -52,7 +52,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git clone https://Hitan2004:$HF_TOKEN@huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui hf_ui
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui hf_ui
 
           rsync -av ui/ hf_ui/
 
