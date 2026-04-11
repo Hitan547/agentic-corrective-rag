@@ -31,6 +31,8 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -e
+
           pip install huggingface_hub
           sudo apt-get update
           sudo apt-get install -y rsync
@@ -38,19 +40,19 @@ jobs:
           git config --global user.email "you@example.com"
           git config --global user.name "github-actions"
 
-          # clone normally (no auth in URL)
+          # clone repo
           git clone https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag hf_backend
 
           cd hf_backend
 
-          # 🔥 set authenticated remote (FIX)
-          git remote set-url origin https://user:$HF_TOKEN@huggingface.co/spaces/Hitan2004/agentic-corrective-rag
+          # 🔥 FIXED AUTH (IMPORTANT)
+          git remote set-url origin https://user:${HF_TOKEN}@huggingface.co/spaces/Hitan2004/agentic-corrective-rag
 
-          # copy backend files (exclude ui)
+          # copy backend files (exclude UI + .git)
           rsync -av --exclude='.git' --exclude='ui' ../ ./
 
           git add .
-          git commit -m "Auto deploy backend" || echo "No changes"
+          git commit -m "Auto deploy backend" || echo "No changes to commit"
           git push
 
       # 🎨 DEPLOY UI
@@ -58,16 +60,18 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -e
+
           git clone https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui hf_ui
 
           cd hf_ui
 
-          # 🔥 set authenticated remote (FIX)
-          git remote set-url origin https://user:$HF_TOKEN@huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui
+          # 🔥 FIXED AUTH (IMPORTANT)
+          git remote set-url origin https://user:${HF_TOKEN}@huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui
 
-          # copy only UI files
+          # copy UI files only
           rsync -av ../ui/ ./
 
           git add .
-          git commit -m "Auto deploy UI" || echo "No changes"
+          git commit -m "Auto deploy UI" || echo "No changes to commit"
           git push
