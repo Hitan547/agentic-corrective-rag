@@ -2,15 +2,17 @@
 
 <div align="center">
 
-**Production-grade document retrieval system with self-correcting agent reasoning**
+### **Production-Grade Document Retrieval System with Self-Correcting Agent Reasoning**
 
-[![Frontend UI](https://img.shields.io/badge/Frontend-HF%20Spaces-blue?style=for-the-badge&logo=huggingface)]([https://hitan2004-agentic-corrective-rag-ui.hf.space](https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui))
-[![Backend API](https://img.shields.io/badge/API-HF%20Spaces-blue?style=for-the-badge&logo=huggingface)](https://hitan2004-agentic-corrective-rag.hf.space)
+[![Frontend UI](https://img.shields.io/badge/Frontend-HuggingFace%20Spaces-blue?style=for-the-badge&logo=huggingface)](https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui)
+
+[![Backend API](https://img.shields.io/badge/API-HuggingFace%20Spaces-blue?style=for-the-badge&logo=huggingface)](https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag)
+
 [![API Docs](https://img.shields.io/badge/Swagger-Docs-green?style=for-the-badge)](https://hitan2004-agentic-corrective-rag.hf.space/docs)
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Hitan547/agentic-corrective-rag)
-[![Python](https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python)](#tech-stack)
 
-*Upload documents, ask questions, get answers grounded in source material with automated hallucination detection and self-correction.*
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Hitan547/agentic-corrective-rag)
+
+[![Python](https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python)](#tech-stack)
 
 </div>
 
