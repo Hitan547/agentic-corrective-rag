@@ -24,4 +24,4 @@ jobs:
       - name: Run unit tests only   # ← integration tests are skipped here
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}  # add this in GitHub → Settings → Secrets
-        run: pytest tests/test_unit.py -v
+        run: pytest -v -m "not integration"
