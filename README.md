@@ -1,13 +1,3 @@
----
-title: Agentic Corrective RAG
-emoji: 🧠
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_file: main.py
-pinned: false
----
-
 # 🧠 Agentic Corrective RAG — Document Q&A with Self-Correction
 
 <div align="center">
