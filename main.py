@@ -1,5 +1,4 @@
-import os
-import shutil
+import os, shutil, sqlite3, json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
@@ -7,12 +6,58 @@ from langchain_core.messages import HumanMessage, AIMessage
 from retriever import load_indexes, reload_indexes, hybrid_retrieve, indexes_loaded as _indexes_loaded
 from agent import run_rag_agent
 from ingestion import run_ingestion
-from config import DOCS_DIR, TOP_K, MAX_HISTORY_TURNS
+from config import DOCS_DIR, TOP_K, MAX_HISTORY_TURNS, SQLITE_PATH
 
-sessions: dict = {}
+# ── SQLite session memory ─────────────────────────────
+
+def _init_db():
+    con = sqlite3.connect(SQLITE_PATH)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id TEXT PRIMARY KEY,
+            history    TEXT NOT NULL DEFAULT '[]'
+        )
+    """)
+    con.commit()
+    con.close()
+
+def _load_history(session_id: str) -> list:
+    con = sqlite3.connect(SQLITE_PATH)
+    row = con.execute(
+        "SELECT history FROM sessions WHERE session_id=?", (session_id,)
+    ).fetchone()
+    con.close()
+    if not row:
+        return []
+    raw = json.loads(row[0])
+    # Reconstruct LangChain message objects
+    msgs = []
+    for m in raw:
+        if m["role"] == "human":
+            msgs.append(HumanMessage(content=m["content"]))
+        else:
+            msgs.append(AIMessage(content=m["content"]))
+    return msgs
+
+def _save_history(session_id: str, history: list):
+    raw = [
+        {"role": "human" if isinstance(m, HumanMessage) else "ai",
+         "content": m.content}
+        for m in history
+    ]
+    con = sqlite3.connect(SQLITE_PATH)
+    con.execute(
+        "INSERT OR REPLACE INTO sessions (session_id, history) VALUES (?,?)",
+        (session_id, json.dumps(raw))
+    )
+    con.commit()
+    con.close()
+
+# ── app lifecycle ─────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _init_db()
     try:
         load_indexes()
     except FileNotFoundError:
@@ -21,9 +66,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Corrective RAG API", version="1.0", lifespan=lifespan)
 
-@app.get("/")
-def home():
-    return {"message": "RAG API running 🚀"}
+# ── models ────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
     question:   str
@@ -37,26 +80,31 @@ class QueryResponse(BaseModel):
     validation:   str
     session_id:   str
 
+# ── routes ────────────────────────────────────────────
+
+@app.get("/")
+def home():
+    return {"message": "RAG API running 🚀"}
+
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest):
     if not _indexes_loaded():
-        try:
-            load_indexes()
-        except Exception:
-            pass
+        try: load_indexes()
+        except: pass
     if not _indexes_loaded():
-        raise HTTPException(
-            status_code=503,
-            detail="Indexes not ready. Upload and index documents first."
-        )
+        raise HTTPException(503, detail="Indexes not ready. Upload documents first.")
+
     results = hybrid_retrieve(req.question, top_k=req.top_k)
     if not results:
-        raise HTTPException(status_code=404, detail="No relevant chunks found.")
-    history = sessions.get(req.session_id, [])
+        raise HTTPException(404, detail="No relevant chunks found.")
+
+    history = _load_history(req.session_id)
     answer, retries, verdict = run_rag_agent(req.question, results, history)
+
     history.append(HumanMessage(content=req.question))
     history.append(AIMessage(content=answer))
-    sessions[req.session_id] = history[-(MAX_HISTORY_TURNS * 2):]
+    _save_history(req.session_id, history[-(MAX_HISTORY_TURNS * 2):])
+
     return QueryResponse(
         answer=answer,
         sources=[{"chunk": r["chunk"][:300], "source": r["source"]} for r in results],
@@ -70,29 +118,28 @@ async def upload(file: UploadFile = File(...)):
     allowed = {".txt", ".pdf"}
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in allowed:
-        raise HTTPException(status_code=400, detail="Only .txt and .pdf files allowed.")
+        raise HTTPException(400, detail="Only .txt and .pdf allowed.")
     os.makedirs(DOCS_DIR, exist_ok=True)
     dest = os.path.join(DOCS_DIR, file.filename)
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
     _reindex()
-    return {"status": "uploaded", "filename": file.filename,
-            "message": "Indexing complete."}
+    return {"status": "uploaded", "filename": file.filename}
 
 def _reindex():
     try:
         run_ingestion()
-        print("Ingestion done, reloading indexes...")
         reload_indexes()
-        print(f"Re-indexing complete. Indexes loaded: {_indexes_loaded()}")
+        print(f"Re-indexing complete. Loaded: {_indexes_loaded()}")
     except Exception as e:
         import traceback
-        print(f"Re-indexing failed: {e}")
-        traceback.print_exc()
+        print(f"Re-indexing failed: {e}"); traceback.print_exc()
 
 @app.delete("/session/{session_id}")
 def clear_session(session_id: str):
-    sessions.pop(session_id, None)
+    con = sqlite3.connect(SQLITE_PATH)
+    con.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
+    con.commit(); con.close()
     return {"status": "cleared", "session_id": session_id}
 
 @app.get("/health")
