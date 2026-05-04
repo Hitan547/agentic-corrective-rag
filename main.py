@@ -58,12 +58,22 @@ def _save_history(session_id: str, history: list):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _init_db()
-    try:
-        load_indexes()
-    except FileNotFoundError:
-        print("WARNING: No indexes found. Upload documents first.")
+    load_indexes()
+    if not _indexes_loaded():
+        from pathlib import Path
+        docs_path = Path(DOCS_DIR)
+        has_docs = any(docs_path.glob("*.txt")) or any(docs_path.glob("*.pdf"))
+        if has_docs:
+            print("Cold start: ChromaDB empty, re-indexing docs folder...")
+            try:
+                run_ingestion()
+                reload_indexes()
+                print("Cold start ingestion complete.")
+            except Exception as e:
+                print(f"Cold start ingestion failed: {e}")
+        else:
+            print("WARNING: No indexes and no docs found. Upload documents first.")
     yield
-
 app = FastAPI(title="Corrective RAG API", version="1.0", lifespan=lifespan)
 
 # ── models ────────────────────────────────────────────
