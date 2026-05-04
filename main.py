@@ -109,6 +109,15 @@ async def query(req: QueryRequest):
         raise HTTPException(404, detail="No relevant chunks found.")
 
     history = _load_history(req.session_id)
+    try:
+        answer, retries, verdict = run_rag_agent(req.question, results, history)
+    except Exception as e:
+        if "429" in str(e) or "rate_limit" in str(e).lower() or "rate limit" in str(e).lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit reached. Please wait 30 seconds and try again."
+            )
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
     answer, retries, verdict = run_rag_agent(req.question, results, history)
 
     history.append(HumanMessage(content=req.question))
