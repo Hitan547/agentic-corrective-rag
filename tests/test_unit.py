@@ -68,13 +68,17 @@ def mock_indexes(monkeypatch):
     fake_chunks  = ["Paris is in France.", "Tower is 330m tall.", "Built in 1889."]
     fake_sources = ["doc1.txt", "doc1.txt", "doc1.txt"]
 
-    # Fake FAISS index that always returns ids [0, 1, 2]
-    class FakeFaiss:
-        ntotal = 3
-        def search(self, vec, k):
-            ids = np.array([[0, 1, 2]])
-            return None, ids
+    class FakeCollection:
+        def count(self):
+            return len(fake_chunks)
 
+        def query(self, query_embeddings, n_results, include):
+            # Returns the same shape ChromaDB returns
+            return {
+                "documents": [fake_chunks[:n_results]],
+                "metadatas": [[{"source": s} for s in fake_sources[:n_results]]],
+                "distances": [[0.1, 0.2, 0.3][:n_results]],
+            }
     # Fake BM25 that returns uniform scores
     class FakeBM25:
         def get_scores(self, tokens):
@@ -90,7 +94,7 @@ def mock_indexes(monkeypatch):
         def predict(self, pairs):
             return np.array([0.9, 0.7, 0.5][: len(pairs)])
 
-    monkeypatch.setattr(retriever, "_faiss_index", FakeFaiss())
+    monkeypatch.setattr(retriever, "_collection",  FakeCollection())
     monkeypatch.setattr(retriever, "_bm25_index",  FakeBM25())
     monkeypatch.setattr(retriever, "_chunks",      fake_chunks)
     monkeypatch.setattr(retriever, "_sources",     fake_sources)
