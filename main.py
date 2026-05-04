@@ -145,6 +145,12 @@ def clear_session(session_id: str):
 @app.get("/health")
 def health():
     return {"status": "ok", "indexes_loaded": _indexes_loaded()}
+@app.get("/eval")
+def get_eval():
+    if not os.path.exists("eval_results.json"):
+        raise HTTPException(status_code=404, detail="Run evaluate.py first to generate scores.")
+    with open("eval_results.json", "r") as f:
+        return json.load(f)
 
 if __name__ == "__main__":
     import uvicorn
