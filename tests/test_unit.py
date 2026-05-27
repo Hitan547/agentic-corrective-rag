@@ -56,6 +56,36 @@ def test_increment_retry_node():
     result = increment_retry_node({"retry_count": 1})
     assert result["retry_count"] == 2
 
+def test_parse_validation_score_accepts_score_out_of_100():
+    from agent import _parse_validation_score
+    assert _parse_validation_score("85/100", 0) == 85
+
+def test_agent_returns_best_attempt_when_validation_fails(monkeypatch):
+    import agent
+
+    class FakeGraph:
+        def invoke(self, init_state):
+            return {
+                **init_state,
+                "answer": "weak final answer",
+                "retry_count": 3,
+                "validation_result": "FAIL",
+                "validation_score": 40,
+                "fail_reason": "Not supported by context",
+                "best_answer": "best available answer",
+                "best_validation_score": 70,
+                "best_fail_reason": "Partially supported by context",
+            }
+
+    monkeypatch.setattr(agent, "_rag_graph", FakeGraph())
+    answer, retries, verdict = agent.run_rag_agent("q", [{"chunk": "c", "source": "s"}])
+    assert "I could not fully validate a confident answer" in answer
+    assert "validation score: 70/100" in answer
+    assert "Partially supported by context" in answer
+    assert "best available answer" in answer
+    assert retries == 3
+    assert verdict == "FAIL"
+
 # ── Retriever output shape (mocked indexes) ───────────────────────────────────
 
 @pytest.fixture

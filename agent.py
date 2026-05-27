@@ -1,4 +1,4 @@
-#agent.py
+import re
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
@@ -11,15 +11,32 @@ llm = ChatGroq(
     api_key=GROQ_API_KEY,
 )
 
+SAFE_FALLBACK_ANSWER = "I don't have enough information in the provided documents."
+LOW_CONFIDENCE_PREFIX = (
+    "I could not fully validate a confident answer after all retries. "
+    "Best attempt"
+)
+
+
+def _parse_validation_score(raw_score: str, default: int) -> int:
+    match = re.search(r"\d+", raw_score)
+    if not match:
+        return default
+    return max(0, min(100, int(match.group(0))))
+
 
 class RAGState(TypedDict):
     question:          str
     context_chunks:    list
     answer:            str
     validation_result: str
+    validation_score:  int
     fail_reason:       str
     retry_count:       int
     chat_history:      list
+    best_answer:       str
+    best_validation_score: int
+    best_fail_reason:  str
 
 
 def generate_node(state: RAGState) -> dict:
@@ -38,7 +55,8 @@ def generate_node(state: RAGState) -> dict:
     if state.get("retry_count", 0) > 0:
         correction = (
             f"\n\nIMPORTANT CORRECTION REQUIRED: Your previous answer was "
-            f"rejected because: {state.get('fail_reason', 'unverifiable claims')}. "
+            f"rejected because: {state.get('fail_reason', 'unverifiable claims')} "
+            f"(validation score: {state.get('validation_score', 0)}/100). "
             f"Re-answer using ONLY the context provided."
         )
 
@@ -67,14 +85,17 @@ def validate_node(state: RAGState) -> dict:
         "1. Is every factual claim directly supported by the context?\n"
         "2. Does the answer address the question?\n"
         "3. Are there any invented facts not in the context?\n\n"
+        "Also assign a validation score from 0 to 100, where 100 means every claim is fully grounded.\n\n"
         f"Context:\n{context_text}\n\n"
         f"Question: {state['question']}\n"
         f"Answer: {state['answer']}\n\n"
         "Respond in EXACTLY this format:\n"
         "VERDICT: PASS\n"
+        "SCORE: <0-100>\n"
         "REASON: <one sentence>\n\n"
         "or\n\n"
         "VERDICT: FAIL\n"
+        "SCORE: <0-100>\n"
         "REASON: <one sentence explaining what is wrong>"
     )
 
@@ -83,12 +104,29 @@ def validate_node(state: RAGState) -> dict:
 
     verdict = "PASS" if "VERDICT: PASS" in text.upper() else "FAIL"
     reason  = ""
+    score   = 100 if verdict == "PASS" else 0
     for line in text.splitlines():
         if line.upper().startswith("REASON:"):
             reason = line.split(":", 1)[1].strip()
-            break
+        elif line.upper().startswith("SCORE:"):
+            raw_score = line.split(":", 1)[1].strip()
+            score = _parse_validation_score(raw_score, score)
 
-    return {"validation_result": verdict, "fail_reason": reason}
+    best_score = state.get("best_validation_score", -1)
+    best_updates = {}
+    if score > best_score:
+        best_updates = {
+            "best_answer": state["answer"],
+            "best_validation_score": score,
+            "best_fail_reason": reason,
+        }
+
+    return {
+        "validation_result": verdict,
+        "validation_score": score,
+        "fail_reason": reason,
+        **best_updates,
+    }
 
 
 def increment_retry_node(state: RAGState) -> dict:
@@ -133,9 +171,24 @@ def run_rag_agent(
         "context_chunks":    context_chunks,
         "answer":            "",
         "validation_result": "",
+        "validation_score":  0,
         "fail_reason":       "",
         "retry_count":       0,
         "chat_history":      chat_history,
+        "best_answer":       "",
+        "best_validation_score": -1,
+        "best_fail_reason":  "",
     }
     final = _rag_graph.invoke(init_state)
+
+    if final.get("validation_result") == "FAIL":
+        best_answer = final.get("best_answer") or final.get("answer") or SAFE_FALLBACK_ANSWER
+        best_score = final.get("best_validation_score", final.get("validation_score", 0))
+        best_reason = final.get("best_fail_reason") or final.get("fail_reason", "Validation failed")
+        answer = (
+            f"{LOW_CONFIDENCE_PREFIX} (validation score: {best_score}/100). "
+            f"Reason: {best_reason}\n\n{best_answer}"
+        )
+        return answer, final.get("retry_count", 0), "FAIL"
+
     return final["answer"], final["retry_count"], final["validation_result"]

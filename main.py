@@ -118,7 +118,6 @@ async def query(req: QueryRequest):
                 detail="Rate limit reached. Please wait 30 seconds and try again."
             )
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
-    answer, retries, verdict = run_rag_agent(req.question, results, history)
 
     history.append(HumanMessage(content=req.question))
     history.append(AIMessage(content=answer))
