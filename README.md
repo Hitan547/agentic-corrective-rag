@@ -26,7 +26,13 @@ license: mit
 </div>
 
 ---
-LIVE = https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui
+## Live Demo
+
+> Interactive prototype available here:
+
+[![Open Live App]((https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui))
+
+
 ## 🎯 What This Is
 
 A document Q&A system that goes beyond naive RAG. Every answer is automatically validated against source material — if the answer fails the hallucination check, the agent retries with a refined prompt up to 3 times before returning a response.
