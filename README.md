@@ -30,7 +30,7 @@ license: mit
 
 > Interactive prototype available here:
 
-[![Open Live App]((https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui))
+[![Open Live App](https://img.shields.io/badge/Open%20Live%20App-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://huggingface.co/spaces/Hitan2004/agentic-corrective-rag-ui)
 
 
 ## 🎯 What This Is
