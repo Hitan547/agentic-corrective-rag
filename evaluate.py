@@ -38,7 +38,10 @@ for i, item in enumerate(eval_data):
     print(f"[{i+1}/{len(eval_data)}] {question}")
 
     chunks = hybrid_retrieve(question, top_k=TOP_K)
-    answer, retries, verdict = run_rag_agent(question, chunks)
+    agent_result = run_rag_agent(question, chunks)
+    answer = agent_result["answer"]
+    retries = agent_result["retries_used"]
+    verdict = agent_result["validation"]
     contexts = [c["chunk"] for c in chunks]
 
     print(f"  → verdict: {verdict} | retries: {retries}")

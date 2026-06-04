@@ -1,6 +1,8 @@
 import os, shutil, sqlite3, json
+from typing import Any, AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 from retriever import load_indexes, reload_indexes, hybrid_retrieve, indexes_loaded as _indexes_loaded
@@ -88,13 +90,44 @@ class QueryResponse(BaseModel):
     sources:      list
     retries_used: int
     validation:   str
+    validation_score: int
+    confidence:   int
+    status:       str
     session_id:   str
+
+class StreamEvent(BaseModel):
+    event: str
+    data: dict[str, Any]
 
 # ── routes ────────────────────────────────────────────
 
 @app.get("/")
 def home():
     return {"message": "RAG API running 🚀"}
+
+def _build_query_response(req: QueryRequest, results: list, agent_result: dict) -> QueryResponse:
+    return QueryResponse(
+        answer=agent_result["answer"],
+        sources=[{"chunk": r["chunk"][:300], "source": r["source"]} for r in results],
+        retries_used=agent_result["retries_used"],
+        validation=agent_result["validation"],
+        validation_score=agent_result["validation_score"],
+        confidence=agent_result["confidence"],
+        status=agent_result["status"],
+        session_id=req.session_id,
+    )
+
+def _sse(data: dict[str, Any], event: str = "message") -> str:
+    payload = json.dumps({"event": event, "data": data}, ensure_ascii=False)
+    return f"event: {event}\ndata: {payload}\n\n"
+
+def _chunk_text(text: str, chunk_size: int = 24) -> Generator[str, None, None]:
+    words = text.split()
+    if not words:
+        yield ""
+        return
+    for i in range(0, len(words), chunk_size):
+        yield " ".join(words[i:i + chunk_size])
 
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest):
@@ -110,7 +143,7 @@ async def query(req: QueryRequest):
 
     history = _load_history(req.session_id)
     try:
-        answer, retries, verdict = run_rag_agent(req.question, results, history)
+        agent_result = run_rag_agent(req.question, results, history)
     except Exception as e:
         if "429" in str(e) or "rate_limit" in str(e).lower() or "rate limit" in str(e).lower():
             raise HTTPException(
@@ -119,17 +152,51 @@ async def query(req: QueryRequest):
             )
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
+    answer = agent_result["answer"]
+
     history.append(HumanMessage(content=req.question))
     history.append(AIMessage(content=answer))
     _save_history(req.session_id, history[-(MAX_HISTORY_TURNS * 2):])
 
-    return QueryResponse(
-        answer=answer,
-        sources=[{"chunk": r["chunk"][:300], "source": r["source"]} for r in results],
-        retries_used=retries,
-        validation=verdict,
-        session_id=req.session_id,
-    )
+    return _build_query_response(req, results, agent_result)
+
+@app.post("/query/stream")
+async def query_stream(req: QueryRequest):
+    if not _indexes_loaded():
+        try: load_indexes()
+        except: pass
+    if not _indexes_loaded():
+        raise HTTPException(503, detail="Indexes not ready. Upload documents first.")
+
+    results = hybrid_retrieve(req.question, top_k=req.top_k)
+    if not results:
+        raise HTTPException(404, detail="No relevant chunks found.")
+
+    history = _load_history(req.session_id)
+    try:
+        agent_result = run_rag_agent(req.question, results, history)
+    except Exception as e:
+        if "429" in str(e) or "rate_limit" in str(e).lower() or "rate limit" in str(e).lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit reached. Please wait 30 seconds and try again."
+            )
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
+    answer = agent_result["answer"]
+    history.append(HumanMessage(content=req.question))
+    history.append(AIMessage(content=answer))
+    _save_history(req.session_id, history[-(MAX_HISTORY_TURNS * 2):])
+
+    response_payload = _build_query_response(req, results, agent_result).model_dump()
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        yield _sse({"status": "started", "session_id": req.session_id}, "start")
+        for chunk in _chunk_text(answer):
+            yield _sse({"text": chunk}, "chunk")
+        yield _sse({"response": response_payload}, "final")
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):

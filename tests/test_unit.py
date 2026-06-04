@@ -78,7 +78,10 @@ def test_agent_returns_best_attempt_when_validation_fails(monkeypatch):
             }
 
     monkeypatch.setattr(agent, "_rag_graph", FakeGraph())
-    answer, retries, verdict = agent.run_rag_agent("q", [{"chunk": "c", "source": "s"}])
+    result = agent.run_rag_agent("q", [{"chunk": "c", "source": "s"}])
+    answer = result["answer"]
+    retries = result["retries_used"]
+    verdict = result["validation"]
     assert "I could not fully validate a confident answer" in answer
     assert "validation score: 70/100" in answer
     assert "Partially supported by context" in answer

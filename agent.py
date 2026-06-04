@@ -39,6 +39,17 @@ class RAGState(TypedDict):
     best_fail_reason:  str
 
 
+class AgentResult(TypedDict):
+    answer: str
+    validation: str
+    validation_score: int
+    retries_used: int
+    confidence: int
+    status: str
+    fail_reason: str
+    best_validation_score: int
+
+
 def generate_node(state: RAGState) -> dict:
     context_text = "\n\n---\n\n".join(
         f"[Source: {r['source']}]\n{r['chunk']}"
@@ -165,7 +176,7 @@ def run_rag_agent(
     question:       str,
     context_chunks: list,
     chat_history:   list = [],
-) -> tuple:
+) -> AgentResult:
     init_state: RAGState = {
         "question":          question,
         "context_chunks":    context_chunks,
@@ -189,6 +200,24 @@ def run_rag_agent(
             f"{LOW_CONFIDENCE_PREFIX} (validation score: {best_score}/100). "
             f"Reason: {best_reason}\n\n{best_answer}"
         )
-        return answer, final.get("retry_count", 0), "FAIL"
+        return {
+            "answer": answer,
+            "validation": "FAIL",
+            "validation_score": final.get("validation_score", 0),
+            "retries_used": final.get("retry_count", 0),
+            "confidence": best_score,
+            "status": "needs_review",
+            "fail_reason": best_reason,
+            "best_validation_score": best_score,
+        }
 
-    return final["answer"], final["retry_count"], final["validation_result"]
+    return {
+        "answer": final["answer"],
+        "validation": final["validation_result"],
+        "validation_score": final.get("validation_score", 100),
+        "retries_used": final.get("retry_count", 0),
+        "confidence": final.get("validation_score", 100),
+        "status": "success",
+        "fail_reason": final.get("fail_reason", ""),
+        "best_validation_score": final.get("best_validation_score", final.get("validation_score", 100)),
+    }

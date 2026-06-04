@@ -41,9 +41,12 @@ def test_full_pipeline_live():
         assert len(results) > 0
         assert "ce_score" in results[0]          # reranker ran
 
-        answer, retries, verdict = run_rag_agent(
+        agent_result = run_rag_agent(
             "How tall is the Eiffel Tower?", results
         )
+        answer = agent_result["answer"]
+        retries = agent_result["retries_used"]
+        verdict = agent_result["validation"]
         assert "330" in answer or "metres" in answer.lower()
         assert verdict in {"PASS", "FAIL"}
 

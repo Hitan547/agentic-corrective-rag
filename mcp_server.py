@@ -22,7 +22,7 @@ def wake_up_hf():
 def query_rag(question: str, session_id: str = "default") -> dict:
     """Query documents using corrective RAG with hallucination detection."""
     response = requests.post(f"{HF_URL}/query",
-                             json={"query": question, "session_id": session_id})
+                             json={"question": question, "session_id": session_id})
     return response.json()
 
 @mcp.tool()
