@@ -69,6 +69,7 @@ python evaluate.py
 | **Persistent Sessions** | SQLite — conversations survive server restarts | Real multi-turn memory |
 | **RAG Evaluation** | RAGAS — Faithfulness + Answer Relevancy | Measured performance, not assumed |
 | **Graceful Error Handling** | Rate limit 429 with user-friendly message | Production-appropriate error responses |
+| **Streaming Chat** | `/query/stream` SSE endpoint | Optional live answer rendering |
 | **MCP Integration** | Exposes full pipeline as callable agent tools | Any AI agent can use this as a tool |
 | **CI/CD Pipeline** | GitHub Actions, unit + integration tests | Ships with confidence |
 | **Multi-Service Deployment** | Backend API + frontend UI on HuggingFace Spaces | Live, accessible demo |
@@ -126,6 +127,20 @@ This project exposes the RAG pipeline as [Model Context Protocol](https://modelc
 | `ingest_document` | Upload and index a PDF or TXT file |
 | `clear_session` | Clear conversation memory for a session |
 
+## 🧭 Response Contract
+
+The backend returns a structured response so every caller sees the same fields:
+
+| Field | Meaning |
+|---|---|
+| `answer` | Final answer text returned to the user |
+| `validation` | `PASS` or `FAIL` from the corrective agent |
+| `validation_score` | Validator score from 0 to 100 |
+| `retries_used` | Number of retry cycles consumed |
+| `confidence` | Best available confidence signal for the answer |
+| `status` | `success` or `needs_review` |
+| `sources` | Retrieved chunks shown back to the client |
+
 **Connect to Claude Desktop**
 
 ```json
@@ -169,6 +184,11 @@ curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"question": "What is the main topic?", "session_id": "user1"}'
 
+# Stream query
+curl -N -X POST http://localhost:8000/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the main topic?", "session_id": "user1"}'
+
 # View evaluation scores
 curl http://localhost:8000/eval
 ```
@@ -189,6 +209,7 @@ docker run -e GROQ_API_KEY=your_key -p 8000:8000 agentic-rag:latest
 | `/health` | GET | System health + index status |
 | `/upload` | POST | Upload and index a document |
 | `/query` | POST | Ask a question with session memory |
+| `/query/stream` | POST | Ask a question with SSE streaming |
 | `/eval` | GET | Live RAGAS evaluation scores |
 | `/session/{id}` | DELETE | Clear session memory |
 | `/docs` | GET | Swagger UI |
@@ -202,7 +223,7 @@ agentic-corrective-rag/
 ├── agent.py            # LangGraph corrective agent (generate → validate → retry)
 ├── retriever.py        # Hybrid ChromaDB + BM25 retrieval with RRF + reranking
 ├── ingestion.py        # Document parsing, chunking, dedup, ChromaDB indexing
-├── main.py             # FastAPI backend with SQLite sessions + error handling
+├── main.py             # FastAPI backend with SQLite sessions, JSON + streaming query APIs
 ├── mcp_server.py       # MCP tool server
 ├── evaluate.py         # RAGAS evaluation script
 ├── eval_dataset.json   # 10-question benchmark dataset
@@ -248,8 +269,8 @@ agentic-corrective-rag/
 
 ## 🔧 Design Decisions
 
-**Why ChromaDB over FAISS?**
-In-memory FAISS loses all embeddings on restart. ChromaDB persists to disk — no recomputation overhead, production-appropriate behavior. Cold-start auto-ingestion ensures the system rebuilds indexes from the docs folder on every fresh deploy.
+**Why a persistent vector store?**
+The project uses ChromaDB because it persists to disk, avoids recomputation on restart, and fits the current backend architecture. Cold-start auto-ingestion ensures the system rebuilds indexes from the docs folder on every fresh deploy.
 
 **Why hybrid retrieval?**
 Dense search (semantic) misses exact keyword matches. BM25 misses semantic similarity. RRF fusion captures both. The cross-encoder reranker then re-scores for final precision.

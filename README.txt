@@ -24,7 +24,7 @@ Agentic Corrective RAG is a production-grade document Q&A system that combines a
 
 | Feature | Capability |
 |---------|-----------|
-| **Hybrid Retrieval** | FAISS semantic + BM25 keyword search with RRF fusion |
+| **Hybrid Retrieval** | ChromaDB semantic + BM25 keyword search with RRF fusion |
 | **Intelligent Reranking** | Cross-encoder re-scores top-k candidates for precision |
 | **Self-Correcting Agent** | LangGraph pipeline validates answers and auto-retries |
 | **Hallucination Detection** | Second LLM call verifies every claim against context |
@@ -89,14 +89,14 @@ Document Upload
 │  PyMuPDF / TXT Parser                  │
 │  Split into 512-token chunks            │
 │  Embedding: all-MiniLM-L6-v2           │
-│  Index: FAISS (dense) + BM25 (sparse)  │
+│  Index: ChromaDB (dense) + BM25 (sparse)  │
 └─────────────────────────────────────────┘
 
 Query Processing
     ↓
 ┌─────────────────────────────────────────┐
 │      Hybrid Retrieval Pipeline          │
-│  FAISS Top 10 + BM25 Top 10            │
+│  ChromaDB Top 10 + BM25 Top 10          │
 │  → RRF Fusion (Top 5 combined)         │
 │  → Cross-Encoder Reranking             │
 └─────────────────────────────────────────┘
@@ -183,7 +183,7 @@ docker run -e GROQ_API_KEY=your_key -p 8000:8000 agentic-rag:latest
 ```
 agentic-corrective-rag/
 ├── agent.py          # LangGraph corrective agent
-├── retriever.py      # Hybrid FAISS + BM25 retrieval
+├── retriever.py      # Hybrid ChromaDB + BM25 retrieval
 ├── ingestion.py      # Document parsing and indexing
 ├── main.py           # FastAPI backend
 ├── mcp_server.py     # MCP tool server (NEW)

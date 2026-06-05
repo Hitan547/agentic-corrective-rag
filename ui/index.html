@@ -189,6 +189,32 @@
   }
   .stack-info strong { color: var(--text-dim); }
 
+  .mode-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    user-select: none;
+  }
+  .mode-toggle input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+  }
+  .mode-toggle strong {
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
   /* ── Main ── */
   .main {
     flex: 1;
@@ -221,8 +247,10 @@
     flex: 1;
     overflow-y: auto;
     padding: 24px 32px;
+    padding-bottom: 92px;
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
     gap: 16px;
     scroll-behavior: smooth;
   }
@@ -285,6 +313,7 @@
   }
   .meta .pass { color: var(--pass); font-weight: 600; }
   .meta .fail { color: var(--fail); font-weight: 600; }
+  .meta .warn { color: var(--warn); font-weight: 600; }
 
   .sources { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
   .source-chip {
@@ -298,6 +327,22 @@
     line-height: 1.5;
   }
   .source-chip strong { color: var(--text-dim); display: block; margin-bottom: 2px; }
+
+  .status-card {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
+  .status-card span {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #0a0a10;
+  }
 
   /* ── Input ── */
   .input-area {
@@ -398,14 +443,23 @@
     <input type="range" id="topK" min="1" max="10" value="5">
   </div>
 
+  <div class="mode-wrap">
+    <label class="mode-toggle">
+      <input type="checkbox" id="streamToggle">
+      <strong>Stream mode</strong>
+      <span>Live answer chunks from `/query/stream`</span>
+    </label>
+  </div>
+
   <button class="btn btn-ghost" id="clearBtn">🗑 Clear Chat</button>
 
   <div class="stack-info">
     <strong>Stack</strong><br>
-    FAISS + BM25 + RRF<br>
+    ChromaDB + BM25 + RRF<br>
     Cross-encoder reranking<br>
     LangGraph self-correction<br>
-    LLaMA 3.3 70B via Groq
+    LLaMA 3.3 70B via Groq<br>
+    SQLite sessions + MCP tools
   </div>
 </aside>
 
@@ -436,6 +490,8 @@ const API = 'https://hitan2004-agentic-corrective-rag.hf.space';
 let sessionId = 'session_' + Date.now();
 let selectedFile = null;
 let indexed = false;
+let activeStream = null;
+let streamAbort = null;
 
 // ── Status check ──
 async function checkHealth() {
@@ -554,20 +610,30 @@ async function sendQuestion() {
   appendThinking(thinkId);
 
   const topK = document.getElementById('topK').value;
+  const streaming = document.getElementById('streamToggle').checked;
 
   try {
-    const r = await fetch(API + '/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, session_id: sessionId, top_k: parseInt(topK) })
-    });
-    const d = await r.json();
-    removeThinking(thinkId);
-
-    if (r.ok) {
-      appendBotMsg(d);
+    if (streaming) {
+      const result = await sendStreamingQuestion(q, topK, thinkId);
+      if (result.ok) {
+        appendBotMsg(result.data);
+      } else {
+        appendError(result.error || 'Query failed');
+      }
     } else {
-      appendError(d.detail || 'Query failed');
+      const r = await fetch(API + '/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, session_id: sessionId, top_k: parseInt(topK) })
+      });
+      const d = await r.json();
+      removeThinking(thinkId);
+
+      if (r.ok) {
+        appendBotMsg(d);
+      } else {
+        appendError(d.detail || 'Query failed');
+      }
     }
   } catch {
     removeThinking(thinkId);
@@ -578,13 +644,74 @@ async function sendQuestion() {
   input.focus();
 }
 
+async function sendStreamingQuestion(q, topK, thinkId) {
+  if (streamAbort) streamAbort.abort();
+  streamAbort = new AbortController();
+  const response = await fetch(API + '/query/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+    body: JSON.stringify({ question: q, session_id: sessionId, top_k: parseInt(topK) }),
+    signal: streamAbort.signal
+  });
+
+  if (!response.ok || !response.body) {
+    removeThinking(thinkId);
+    const detail = await response.json().catch(() => ({}));
+    return { ok: false, error: detail.detail || 'Streaming query failed' };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let liveBubble = appendStreamingBubble();
+  let finalPayload = null;
+
+  removeThinking(thinkId);
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let parts = buffer.split('\n\n');
+    buffer = parts.pop();
+
+    for (const part of parts) {
+      const eventMatch = part.match(/^event:\s*(.+)$/m);
+      const dataMatch = part.match(/^data:\s*(.+)$/m);
+      if (!dataMatch) continue;
+      let parsed;
+      try {
+        parsed = JSON.parse(dataMatch[1]);
+      } catch {
+        continue;
+      }
+
+      if (parsed.event === 'chunk') {
+        liveBubble.querySelector('.bubble-body').textContent += parsed.data.text + ' ';
+        scrollChatToBottom();
+      } else if (parsed.event === 'final') {
+        finalPayload = parsed.data.response;
+      }
+    }
+  }
+
+  if (finalPayload) {
+    liveBubble.remove();
+    return { ok: true, data: finalPayload };
+  }
+
+  liveBubble.remove();
+  return { ok: false, error: 'Streaming response ended without final payload' };
+}
+
 function appendMsg(role, text) {
   const chat = document.getElementById('chat');
   const div = document.createElement('div');
   div.className = 'msg msg-' + role;
   div.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
   chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom(div);
 }
 
 function appendThinking(id) {
@@ -594,7 +721,7 @@ function appendThinking(id) {
   div.id = id;
   div.innerHTML = `<div class="bubble" style="color:var(--text-muted);font-style:italic;font-size:0.85rem">Thinking<span id="dots">...</span></div>`;
   chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom(div);
 }
 
 function removeThinking(id) {
@@ -611,6 +738,10 @@ function appendBotMsg(data) {
   const verdictHtml = verdict === 'PASS'
     ? `<span class="pass">PASS ✓</span>`
     : `<span class="fail">FAIL ✗</span>`;
+  const statusText = data.status || 'success';
+  const score = data.validation_score ?? 0;
+  const confidence = data.confidence ?? score;
+  const failReason = data.fail_reason ? escHtml(data.fail_reason) : '';
 
   const sourcesHtml = (data.sources || []).map(s => `
     <div class="source-chip">
@@ -625,13 +756,17 @@ function appendBotMsg(data) {
       <div class="meta">
         <span>Verdict: ${verdictHtml}</span>
         <span>Retries: ${data.retries_used ?? 0}</span>
+        <span>Score: ${score}</span>
+        <span>Confidence: ${confidence}</span>
+        <span>Status: ${escHtml(statusText)}</span>
         <span>Sources: ${(data.sources || []).length}</span>
       </div>
+      ${failReason ? `<div class="status-card"><span class="warn">Reason: ${failReason}</span></div>` : ''}
       ${sourcesHtml ? `<div class="sources">${sourcesHtml}</div>` : ''}
     </div>
   `;
   chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom(div);
 }
 
 function appendError(msg) {
@@ -640,7 +775,34 @@ function appendError(msg) {
   div.className = 'msg msg-bot';
   div.innerHTML = `<div class="bubble" style="border-left-color:var(--fail);color:var(--fail);font-family:var(--mono);font-size:0.8rem">❌ ${escHtml(msg)}</div>`;
   chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  scrollChatToBottom(div);
+}
+
+function appendStreamingBubble() {
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'msg msg-bot';
+  div.innerHTML = `
+    <div class="bubble">
+      <div class="bubble-body"></div>
+      <div class="meta">
+        <span>Streaming</span>
+      </div>
+    </div>
+  `;
+  chat.appendChild(div);
+  scrollChatToBottom(div);
+  return div;
+}
+
+function scrollChatToBottom(target) {
+  const chat = document.getElementById('chat');
+  const el = target || chat.lastElementChild;
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  } else {
+    chat.scrollTop = chat.scrollHeight;
+  }
 }
 
 function escHtml(str) {
